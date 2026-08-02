@@ -25,7 +25,7 @@ flowchart LR
 The pipeline runs as **four small API steps orchestrated by the client** (resolve → crawl → analyze → competitors). Each step paints live progress in the chat, is independently retryable, and stays comfortably inside serverless execution limits — no single long-running request.
 
 1. **Resolve** — URL input is used directly; a company name becomes a Serper.dev search where the knowledge-graph website (or first non-aggregator organic hit) is taken as the official site.
-2. **Crawl** — fetches the homepage, scores internal links by path keywords (`about`, `contact`, `products`, `services`, `solutions`, `pricing`, …), skips login/legal/blog/asset URLs, respects `robots.txt`, dedupes by normalized URL **and** content fingerprint, then fetches the top pages concurrently. Extracts readable text plus deterministic signals: `tel:`/`mailto:` links, schema.org JSON-LD phone/address, social profiles.
+2. **Crawl** — fetches the homepage, scores internal links by path keywords (`about`, `contact`, `products`, `services`, `solutions`, `pricing`, …), skips login/legal/blog/asset URLs, respects `robots.txt`, dedupes by normalized URL **and** content fingerprint, then fetches the top pages concurrently. **Adaptive depth:** if the first wave (7 pages) finds no contact signals or thin content, a second wave digs up to 12 pages, discovering links from crawled pages, not just the homepage. Extracts readable text plus deterministic signals: `tel:`/`mailto:` links, schema.org JSON-LD phone/address, social profiles.
 3. **Analyze** — crawled content + a Serper enrichment search go to an OpenRouter model which returns a **schema-validated JSON profile** (summary, products/services, pain points, industry, HQ). Crawler-found contact details override LLM output — generative models are never the source of truth for phone numbers.
 4. **Competitors** — a Serper "competitors" search grounds the LLM, which returns validated competitors (same country/industry preferred); results are deduped and the target company is filtered out.
 
@@ -34,7 +34,7 @@ The pipeline runs as **four small API steps orchestrated by the client** (resolv
 | Criterion | What's implemented |
 |---|---|
 | **Company Research** | Both input modes (name / URL); official-website detection; name, website, phone, address, products/services, AI pain points |
-| **Website Crawling** | Priority-scored page discovery, duplicate detection (URL + content fingerprint), login/irrelevant-page filtering, robots.txt respect, concurrent fetches with per-page timeouts, JSON-LD & `tel:` extraction |
+| **Website Crawling** | Priority-scored page discovery, **adaptive two-wave depth (7→12 pages when info is missing)**, duplicate detection (URL + content fingerprint), login/irrelevant-page filtering, robots.txt respect, concurrent fetches with per-page timeouts, JSON-LD & `tel:` extraction |
 | **OpenRouter AI** | Any OpenRouter model selectable in the sidebar (live model list, free models grouped first); automatic fallback chain across free models; strict-JSON prompts with zod validation + one corrective retry |
 | **Serper.dev** | Official-site resolution, contact-info enrichment, competitor discovery — three distinct research uses |
 | **Competitor Analysis** | 4–6 real competitors with name, website and a one-line "why it competes" |

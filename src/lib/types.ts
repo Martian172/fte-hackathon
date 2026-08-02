@@ -19,6 +19,8 @@ export interface CrawlResult {
   jsonLdAddress: string | null;
   visited: number;
   skipped: number;
+  /** True when the adaptive second wave ran because info was still missing. */
+  deepCrawl?: boolean;
   warning?: string;
 }
 

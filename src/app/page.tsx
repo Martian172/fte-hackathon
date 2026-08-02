@@ -120,7 +120,12 @@ export default function Home() {
         // 2. Crawl important pages
         setStep(id, "crawl", "active");
         const crawl = await api.crawl(resolved.website, s);
-        setStep(id, "crawl", "done", crawl.warning ?? `${crawl.visited} pages analyzed`);
+        setStep(
+          id,
+          "crawl",
+          "done",
+          crawl.warning ?? `${crawl.visited} pages analyzed${crawl.deepCrawl ? " (deep crawl)" : ""}`
+        );
 
         // 3. AI analysis (OpenRouter) — label transparently if a fallback model ran
         setStep(id, "analyze", "active");

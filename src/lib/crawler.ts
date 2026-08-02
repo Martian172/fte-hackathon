@@ -16,8 +16,15 @@ import type { CrawledPage, CrawlResult } from "./types";
  *     Organization phone/address, social profiles — these outrank LLM guesses later.
  */
 
-const PAGE_LIMIT = 7;
-const CONCURRENCY = 3;
+/**
+ * Adaptive depth: a first wave of important pages, then — only if key signals are
+ * still missing (no contact info, thin content) — a deeper second wave, discovering
+ * links from crawled pages as well as the homepage.
+ */
+const FIRST_WAVE = 6; // + homepage = 7 pages for well-structured sites
+const PAGE_LIMIT = 12; // hard cap including the deep-crawl wave
+const MIN_TEXT_CHARS = 6_000; // below this the site is "thin" → dig deeper
+const CONCURRENCY = 4;
 const PER_PAGE_CHARS = 5_000;
 const MAX_HTML_BYTES = 1_500_000;
 
@@ -251,44 +258,62 @@ export async function crawlSite(startUrl: string): Promise<CrawlResult> {
   const disallow = await robotsDisallow(origin);
 
   const homeExtract = extractFromHtml(homeHtml, home);
-  const seenUrls = new Set<string>([home, home + "/"]);
+  const fetched = new Set<string>([home, home + "/"]);
   const fingerprints = new Set<string>([homeExtract.page.text.slice(0, 400)]);
-
-  // Score and select candidate internal links from the homepage
-  let skipped = 0;
   const candidates = new Map<string, number>();
-  for (const link of homeExtract.links) {
-    if (seenUrls.has(link) || candidates.has(link)) continue;
-    if (hostKey(link) !== site) continue;
-    const path = (() => { try { return new URL(link).pathname; } catch { return ""; } })();
-    if (SKIP_PATH.test(path) || SKIP_EXT.test(path) || disallow.some((d) => path.startsWith(d))) {
-      skipped++;
-      continue;
-    }
-    candidates.set(link, linkScore(path));
-  }
-  const targets = [...candidates.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, PAGE_LIMIT - 1)
-    .map(([url]) => url);
+  let skipped = 0;
 
-  // Fetch selected pages in small concurrent batches
-  const extracts: PageExtract[] = [homeExtract];
-  for (let i = 0; i < targets.length; i += CONCURRENCY) {
-    const batch = targets.slice(i, i + CONCURRENCY);
-    const settled = await Promise.allSettled(
-      batch.map(async (url) => {
-        const html = await fetchHtml(url);
-        return html ? extractFromHtml(html, url) : null;
-      })
-    );
-    for (const s of settled) {
-      if (s.status !== "fulfilled" || !s.value) { skipped++; continue; }
-      const fp = s.value.page.text.slice(0, 400);
-      if (fingerprints.has(fp)) { skipped++; continue; } // duplicate content
-      fingerprints.add(fp);
-      extracts.push(s.value);
+  /** Score + queue internal links (used for the homepage AND every crawled page). */
+  const addCandidates = (links: string[]) => {
+    for (const link of links) {
+      if (fetched.has(link) || candidates.has(link)) continue;
+      if (hostKey(link) !== site) continue;
+      const path = (() => { try { return new URL(link).pathname; } catch { return ""; } })();
+      if (SKIP_PATH.test(path) || SKIP_EXT.test(path) || disallow.some((d) => path.startsWith(d))) {
+        skipped++;
+        continue;
+      }
+      candidates.set(link, linkScore(path));
     }
+  };
+  addCandidates(homeExtract.links);
+
+  const extracts: PageExtract[] = [homeExtract];
+
+  /** Fetch the current top-N candidates in concurrent batches, feeding new links back in. */
+  const crawlWave = async (count: number) => {
+    const targets = [...candidates.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, count)
+      .map(([url]) => url);
+    for (const url of targets) { candidates.delete(url); fetched.add(url); }
+    for (let i = 0; i < targets.length; i += CONCURRENCY) {
+      const settled = await Promise.allSettled(
+        targets.slice(i, i + CONCURRENCY).map(async (url) => {
+          const html = await fetchHtml(url);
+          return html ? extractFromHtml(html, url) : null;
+        })
+      );
+      for (const s of settled) {
+        if (s.status !== "fulfilled" || !s.value) { skipped++; continue; }
+        const fp = s.value.page.text.slice(0, 400);
+        if (fingerprints.has(fp)) { skipped++; continue; } // duplicate content
+        fingerprints.add(fp);
+        extracts.push(s.value);
+        addCandidates(s.value.links); // discover deeper links beyond the homepage
+      }
+    }
+  };
+
+  await crawlWave(FIRST_WAVE);
+
+  // Deep crawl only when the first wave left gaps: no contact signals or thin content.
+  const hasContactSignal = () =>
+    extracts.some((e) => e.phones.length || e.emails.length || e.jsonLdPhone || e.jsonLdAddress);
+  const totalText = () => extracts.reduce((n, e) => n + e.page.text.length, 0);
+  const deepCrawl = candidates.size > 0 && (!hasContactSignal() || totalText() < MIN_TEXT_CHARS);
+  if (deepCrawl) {
+    await crawlWave(PAGE_LIMIT - extracts.length);
   }
 
   // Aggregate deterministic signals across pages
@@ -304,5 +329,6 @@ export async function crawlSite(startUrl: string): Promise<CrawlResult> {
     jsonLdAddress: extracts.map((e) => e.jsonLdAddress).find(Boolean) ?? null,
     visited: extracts.length,
     skipped,
+    deepCrawl,
   };
 }
