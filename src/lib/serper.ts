@@ -54,6 +54,25 @@ export async function serperSearch(
   );
 }
 
+/**
+ * Deterministic headquarters lookup, used only when analysis found no address:
+ * knowledge-graph attributes first (Serper often returns "Headquarters: …"),
+ * then a "headquartered in …" pattern over organic snippets. No LLM involved.
+ */
+export async function findHeadquarters(name: string, apiKey: string): Promise<string | null> {
+  try {
+    const res = await serperSearch(`${name} headquarters address`, apiKey, 6);
+    for (const [k, v] of Object.entries(res.knowledgeGraph?.attributes ?? {})) {
+      if (/headquarter|address|location/i.test(k) && v.trim().length > 3) return v.trim();
+    }
+    const text = (res.organic ?? []).map((o) => `${o.title}. ${o.snippet ?? ""}`).join(" ");
+    const m = text.match(/(?:headquarter(?:s|ed)?|based)\s+(?:is\s+|are\s+)?(?:in|at)\s+([A-Z][A-Za-z0-9 ,.'()-]{3,70})/);
+    return m ? m[1].replace(/[.,;:\s]+$/, "").trim() : null;
+  } catch {
+    return null; // best-effort — never fail the research over an address
+  }
+}
+
 /** Render organic results as compact bullet lines for LLM context. */
 export function formatSnippets(res: SerperResponse, max = 6): string {
   const lines: string[] = [];

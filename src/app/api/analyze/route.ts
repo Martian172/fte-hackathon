@@ -3,7 +3,7 @@ import { z } from "zod";
 import { errorJson, handleRouteError, readKeys } from "@/lib/api";
 import { askForJson, DEFAULT_MODEL } from "@/lib/openrouter";
 import { ANALYST_SYSTEM, analyzeUserPrompt } from "@/lib/prompts";
-import { formatSnippets, serperSearch } from "@/lib/serper";
+import { findHeadquarters, formatSnippets, serperSearch } from "@/lib/serper";
 import type { CompanyProfile, CrawlResult } from "@/lib/types";
 
 /**
@@ -15,7 +15,11 @@ import type { CompanyProfile, CrawlResult } from "@/lib/types";
 
 export const maxDuration = 60;
 
-const DIGEST_BUDGET = 22_000; // chars of crawled content sent to the model
+// Latency/detail balance: top-priority pages go in full, tail pages trimmed —
+// prefill shrinks ~30% with no loss of the content that actually drives the profile.
+const DIGEST_BUDGET = 16_000;
+const FULL_PAGES = 3; // highest-scored pages included untrimmed
+const TAIL_PAGE_CAP = 3_000;
 
 const Body = z.object({
   name: z.string().trim().min(1),
@@ -57,12 +61,13 @@ const nullish = (v: string | null | undefined): string | null => {
 function buildDigest(crawl: CrawlResult): string {
   let budget = DIGEST_BUDGET;
   const parts: string[] = [];
-  for (const p of crawl.pages) {
-    if (budget <= 500) break;
-    const chunk = `## ${p.title} (${p.url})\n${p.text.slice(0, Math.min(p.text.length, budget))}`;
+  crawl.pages.forEach((p, i) => {
+    if (budget <= 500) return;
+    const cap = Math.min(i < FULL_PAGES ? p.text.length : TAIL_PAGE_CAP, budget);
+    const chunk = `## ${p.title} (${p.url})\n${p.text.slice(0, cap)}`;
     parts.push(chunk);
     budget -= chunk.length;
-  }
+  });
   return parts.join("\n\n");
 }
 
@@ -107,7 +112,7 @@ export async function POST(req: Request): Promise<NextResponse> {
           content: analyzeUserPrompt({ name, website, digest: buildDigest(crawl as CrawlResult), searchSnippets, signals }),
         },
       ],
-      { apiKey: openrouterKey, model: model || DEFAULT_MODEL }
+      { apiKey: openrouterKey, model: model || DEFAULT_MODEL } // default 1800 max tokens — lower caps truncate JSON on verbose models
     );
 
     // Merge: deterministic signals beat generative output for contact fields.
@@ -127,6 +132,11 @@ export async function POST(req: Request): Promise<NextResponse> {
         return list.length ? list.slice(0, 6) : null;
       })(),
     };
+
+    // Last-resort HQ lookup: dedicated Serper search only when nothing else found one.
+    if (!profile.address && serperKey) {
+      profile.address = await findHeadquarters(name, serperKey);
+    }
 
     return NextResponse.json({ profile, modelUsed });
   } catch (err) {
