@@ -41,6 +41,8 @@ export interface CompanyProfile {
   painPoints: string[];
   industry: string | null;
   hqCountry: string | null;
+  foundedYear: string | null;
+  founders: string[] | null;
 }
 
 export interface Competitor {

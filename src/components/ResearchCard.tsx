@@ -106,6 +106,8 @@ export default function ResearchCard({ msg, onDownloadPdf, onRetry, onRetryDisco
                 ["Address", report.profile.address],
                 ["Industry", report.profile.industry],
                 ["HQ Country", report.profile.hqCountry],
+                ["Founded", report.profile.foundedYear],
+                ["Founders", report.profile.founders?.join(", ") ?? null],
               ] as const
             ).map(([k, v]) => (
               <div key={k} className="rounded-lg border border-white/10 bg-black/30 px-3.5 py-2.5">

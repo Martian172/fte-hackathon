@@ -38,8 +38,12 @@ TASK — return ONLY this JSON object:
   "productsServices": ["5-12 concise names of actual products or services"],
   "painPoints": ["4-6 specific business challenges this company likely faces"],
   "industry": "primary industry or null",
-  "hqCountry": "headquarters country or null"
+  "hqCountry": "headquarters country or null",
+  "foundedYear": "year the company was founded, e.g. \"2010\", or null",
+  "founders": ["founder full names"]
 }
+
+For foundedYear and founders: use the website content, search results, or widely established public knowledge; if genuinely unsure, use null (founders: null, not an empty guess).
 
 Guidance for painPoints: write like a consultant briefing an account executive — specific to THIS company's market position, competition, scale and business model (e.g. pricing pressure from X, dependence on Y, regulatory exposure in Z). Never use generic filler like "keeping up with technology".`;
 }

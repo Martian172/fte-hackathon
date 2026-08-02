@@ -45,6 +45,8 @@ const ProfileSchema = z.object({
   painPoints: z.array(z.string()).min(2),
   industry: z.string().nullable().optional(),
   hqCountry: z.string().nullable().optional(),
+  foundedYear: z.union([z.string(), z.number()]).nullable().optional(),
+  founders: z.array(z.string()).nullable().optional(),
 });
 
 const nullish = (v: string | null | undefined): string | null => {
@@ -79,7 +81,7 @@ export async function POST(req: Request): Promise<NextResponse> {
     let searchSnippets = "";
     if (serperKey) {
       try {
-        const res = await serperSearch(`"${name}" company phone address headquarters`, serperKey, 6);
+        const res = await serperSearch(`"${name}" company founded founders phone address headquarters`, serperKey, 6);
         searchSnippets = formatSnippets(res);
       } catch (err) {
         console.warn("Serper enrichment skipped:", err instanceof Error ? err.message : err);
@@ -119,6 +121,11 @@ export async function POST(req: Request): Promise<NextResponse> {
       painPoints: data.painPoints.slice(0, 6),
       industry: nullish(data.industry),
       hqCountry: nullish(data.hqCountry),
+      foundedYear: data.foundedYear != null ? nullish(String(data.foundedYear)) : null,
+      founders: (() => {
+        const list = (data.founders ?? []).map((f) => f.trim()).filter((f) => f && !/^(null|unknown|n\/a)$/i.test(f));
+        return list.length ? list.slice(0, 6) : null;
+      })(),
     };
 
     return NextResponse.json({ profile, modelUsed });

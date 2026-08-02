@@ -24,6 +24,7 @@ const input =
 export default function Sidebar({ settings, models, onChange, onSave, onNewResearch }: SidebarProps) {
   const [tab, setTab] = useState<"api" | "discord">("api");
   const [saved, setSaved] = useState(false);
+  const [freeOnly, setFreeOnly] = useState(true);
 
   const save = () => {
     onSave();
@@ -99,7 +100,18 @@ export default function Sidebar({ settings, models, onChange, onSave, onNewResea
               />
             </div>
             <div className="space-y-1.5">
-              <label htmlFor="model" className={label}>AI model</label>
+              <div className="flex items-center justify-between">
+                <label htmlFor="model" className={label}>AI model</label>
+                <label className="flex cursor-pointer items-center gap-1.5 text-[10px] text-zinc-500">
+                  <input
+                    type="checkbox"
+                    checked={freeOnly}
+                    onChange={(e) => setFreeOnly(e.target.checked)}
+                    className="h-3 w-3 accent-amber-500"
+                  />
+                  free tier only
+                </label>
+              </div>
               <select
                 id="model"
                 value={settings.model}
@@ -110,13 +122,13 @@ export default function Sidebar({ settings, models, onChange, onSave, onNewResea
                   <option value={settings.model}>{settings.model}</option>
                 )}
                 {freeModels.length > 0 && (
-                  <optgroup label="Free models">
+                  <optgroup label={`Free models (${freeModels.length})`}>
                     {freeModels.map((m) => (
                       <option key={m.id} value={m.id}>{m.name}</option>
                     ))}
                   </optgroup>
                 )}
-                {paidModels.length > 0 && (
+                {!freeOnly && paidModels.length > 0 && (
                   <optgroup label="Paid models (need OpenRouter credits)">
                     {paidModels.map((m) => (
                       <option key={m.id} value={m.id}>{m.name}</option>
@@ -125,7 +137,9 @@ export default function Sidebar({ settings, models, onChange, onSave, onNewResea
                 )}
               </select>
               <p className="text-[10px] leading-relaxed text-zinc-600">
-                Any OpenRouter model. Free-tier models work without credits.
+                {freeOnly
+                  ? "Showing OpenRouter free-tier models — they work without credits."
+                  : "All OpenRouter models. Paid ones need credits on your key."}
               </p>
             </div>
             <button

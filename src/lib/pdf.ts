@@ -11,6 +11,27 @@ const PAGE_H = 841.89;
 const MARGIN = 48;
 const CONTENT_W = PAGE_W - MARGIN * 2;
 
+/**
+ * jsPDF's built-in fonts only cover WinAnsi (Latin-1). LLM output often contains
+ * Unicode punctuation (non-breaking hyphens, smart quotes, NBSP) which renders as
+ * broken glyph spacing ("C o l o r e d"). Normalize everything to safe equivalents.
+ */
+const CHAR_MAP: Record<string, string> = {
+  " ": " ", "‘": "'", "’": "'", "“": '"', "”": '"',
+  "‐": "-", "‑": "-", "‒": "-", "–": "-", "—": "-", "―": "-",
+  "…": "...", "•": "-", "′": "'", "×": "x", "→": "->",
+  "₹": "Rs ", "€": "EUR ", "­": "",
+};
+
+export function sanitizePdfText(input: string): string {
+  return input
+    .normalize("NFKC")
+    .replace(/[ ‘’“”‐-―…•′×→₹€­]/g, (c) => CHAR_MAP[c] ?? "")
+    .replace(/[^\x20-\x7EÀ-ÿ]/g, "") // drop anything else outside WinAnsi
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 const AMBER: [number, number, number] = [245, 158, 11];
 const DARK: [number, number, number] = [17, 17, 19];
 const TEXT: [number, number, number] = [28, 28, 30];
@@ -39,8 +60,9 @@ class PdfBuilder {
     this.y += 14;
   }
 
-  keyValue(label: string, value: string | null): void {
-    const text = value?.trim() || "Not publicly listed";
+  keyValue(label: string, rawValue: string | null): void {
+    const value = rawValue ? sanitizePdfText(rawValue) : null;
+    const text = value || "Not publicly listed";
     const lines = this.doc.setFont("helvetica", "bold").setFontSize(10).splitTextToSize(text, CONTENT_W - 130) as string[];
     const h = Math.max(14, lines.length * 13);
     this.ensure(h + 4);
@@ -52,7 +74,8 @@ class PdfBuilder {
     this.y += h + 4;
   }
 
-  paragraph(text: string): void {
+  paragraph(rawText: string): void {
+    const text = sanitizePdfText(rawText);
     const lines = this.doc.setFont("helvetica", "normal").setFontSize(10).splitTextToSize(text, CONTENT_W) as string[];
     for (const line of lines) {
       this.ensure(14);
@@ -62,7 +85,8 @@ class PdfBuilder {
     }
   }
 
-  bullet(text: string, color: [number, number, number] = AMBER): void {
+  bullet(rawText: string, color: [number, number, number] = AMBER): void {
+    const text = sanitizePdfText(rawText);
     const lines = this.doc.setFont("helvetica", "normal").setFontSize(10).splitTextToSize(text, CONTENT_W - 18) as string[];
     this.ensure(lines.length * 13.5 + 4);
     this.doc.setTextColor(...color).setFont("helvetica", "bold");
@@ -93,7 +117,7 @@ export function buildPdf(report: ResearchReport): { blob: Blob; fileName: string
   doc.setFont("courier", "bold").setFontSize(8.5).setTextColor(...AMBER);
   doc.text("COMPANY RESEARCH AI  ·  COMPANY RESEARCH REPORT", MARGIN, 40);
   doc.setFont("helvetica", "bold").setFontSize(24).setTextColor(255, 255, 255);
-  doc.text(profile.companyName.slice(0, 48), MARGIN, 74);
+  doc.text(sanitizePdfText(profile.companyName).slice(0, 48), MARGIN, 74);
   doc.setFont("helvetica", "normal").setFontSize(9.5).setTextColor(200, 200, 205);
   const generated = new Date(report.generatedAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
   doc.text(`${profile.website}   ·   Generated ${generated}   ·   Model: ${report.modelUsed}`, MARGIN, 96);
@@ -107,6 +131,8 @@ export function buildPdf(report: ResearchReport): { blob: Blob; fileName: string
   b.keyValue("Address", profile.address);
   if (profile.industry) b.keyValue("Industry", profile.industry);
   if (profile.hqCountry) b.keyValue("HQ Country", profile.hqCountry);
+  if (profile.foundedYear) b.keyValue("Founded", profile.foundedYear);
+  if (profile.founders?.length) b.keyValue("Founders", profile.founders.join(", "));
 
   if (profile.summary) {
     b.sectionTitle("Company Summary");
@@ -127,12 +153,12 @@ export function buildPdf(report: ResearchReport): { blob: Blob; fileName: string
   for (const c of competitors) {
     b.ensure(c.reason ? 44 : 30);
     doc.setFont("helvetica", "bold").setFontSize(10.5).setTextColor(...TEXT);
-    doc.text(c.name.slice(0, 60), MARGIN, b.y);
+    doc.text(sanitizePdfText(c.name).slice(0, 60), MARGIN, b.y);
     doc.setFont("helvetica", "normal").setFontSize(9);
     b.link(c.website, c.website, MARGIN + 220);
     b.y += 14;
     if (c.reason) {
-      const lines = doc.setFontSize(8.5).splitTextToSize(c.reason, CONTENT_W) as string[];
+      const lines = doc.setFontSize(8.5).splitTextToSize(sanitizePdfText(c.reason), CONTENT_W) as string[];
       doc.setTextColor(...GRAY);
       doc.text(lines.slice(0, 2), MARGIN, b.y);
       b.y += Math.min(lines.length, 2) * 11 + 3;
