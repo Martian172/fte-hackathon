@@ -56,7 +56,7 @@ The pipeline runs as **four small API steps orchestrated by the client** (resolv
 | **Competitor Analysis** | 4–6 real competitors with name, website and a one-line "why it competes" |
 | **PDF Report** | One-click professional A4 report (jsPDF): header band, company info, summary, products, pain points, competitor table with clickable links, sources, page numbers |
 | **Chat UI** | ChatGPT-style dark interface, live pipeline progress, follow-up Q&A about the researched company, mobile-responsive (slide-over settings), loading states everywhere |
-| **Discord (bonus)** | Settings tab for bot token + channel ID + applicant details; after each report the PDF auto-posts to the channel as an embed + attachment |
+| **Discord (bonus)** | Settings tab for bot token + channel ID + applicant details; after each report the PDF auto-posts to the channel as an embed + attachment. **Verified end-to-end on the live deployment** |
 | **Deployment & docs** | One-click Vercel deploy; this README; `.env.example` documents every variable |
 
 ## Project structure
@@ -124,6 +124,18 @@ Server env keys are **optional**: users can paste their own keys in the sidebar 
 
 Sidebar → **Discord** tab → paste the bot token + channel ID (evaluator-provided) and applicant name/email → Save. Every completed research then auto-sends applicant details, company name/website and the PDF report to the channel. The bot needs **Send Messages** + **Attach Files** permissions in that channel.
 
+Implementation notes: Discord's file upload is `multipart/form-data` against
+`POST /api/v10/channels/{channelId}/messages` — a `payload_json` part carrying the message,
+embed and `attachments` manifest, plus a `files[0]` part with the PDF bytes, authenticated with
+an `Authorization: Bot <token>` header. Every failure mode maps to a specific human-readable
+message (401 bad token · 403 bot lacks channel access · 404 wrong channel ID · 429 rate limit ·
+>8 MB payload), and **a Discord failure never fails the research** — it surfaces as a retryable
+badge on the report card.
+
+✅ Verified end-to-end against a live Discord channel on the deployed app: report card shows
+**"Sent to Discord"** and the channel receives the applicant details, company name/website and
+the PDF attachment.
+
 ## Edge cases handled
 
 - **Site blocks the crawler / is offline** → research continues on Serper data alone (crawl returns a warning, not an error)
@@ -164,7 +176,7 @@ Prompts live in [`src/lib/prompts.ts`](src/lib/prompts.ts). Both AI tasks demand
 - ✅ **AI Company Research** — [`src/app/api/analyze/route.ts`](src/app/api/analyze/route.ts) + [`src/lib/prompts.ts`](src/lib/prompts.ts)
 - ✅ **Competitor Analysis** — [`src/app/api/competitors/route.ts`](src/app/api/competitors/route.ts)
 - ✅ **PDF Generation** — [`src/lib/pdf.ts`](src/lib/pdf.ts) (jsPDF, Unicode-safe)
-- ✅ **Discord Integration (Bonus)** — [`src/app/api/discord/route.ts`](src/app/api/discord/route.ts) + sidebar settings tab
+- ✅ **Discord Integration (Bonus)** — [`src/app/api/discord/route.ts`](src/app/api/discord/route.ts) + sidebar settings tab — **verified end-to-end**
 
 ## Known limitations & next steps
 
