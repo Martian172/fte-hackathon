@@ -9,13 +9,13 @@ import { ApiError, fetchWithTimeout } from "./http";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
-export const DEFAULT_MODEL = "meta-llama/llama-3.3-70b-instruct:free";
+export const DEFAULT_MODEL = "nvidia/nemotron-3-super-120b-a12b:free";
 
 export const FALLBACK_MODELS = [
   DEFAULT_MODEL,
-  "deepseek/deepseek-chat-v3-0324:free",
-  "google/gemini-2.0-flash-exp:free",
-  "mistralai/mistral-small-3.1-24b-instruct:free",
+  "openrouter/free", // OpenRouter's router over all currently-available free models
+  "openai/gpt-oss-20b:free",
+  "google/gemma-4-31b-it:free",
 ];
 
 export interface ChatMessage {

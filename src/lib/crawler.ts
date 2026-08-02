@@ -29,7 +29,7 @@ const BROWSER_HEADERS = {
 };
 
 /** Pages that are irrelevant or risky to crawl (login, legal, content marketing, files). */
-const SKIP_PATH = /login|log-in|signin|sign-in|signup|sign-up|register|auth|password|account|cart|checkout|privacy|terms|legal|cookie|gdpr|career|jobs|press|event|webinar|status|sitemap|search|blog|news|article|podcast|glossary|docs|documentation|support|help-center|faq|investor/i;
+const SKIP_PATH = /login|log-in|signin|sign-in|signup|sign-up|register|auth|password|account|cart|checkout|privacy|terms|legal|cookie|gdpr|career|jobs|press|event|webinar|status|sitemap|search|blog|news|article|podcast|glossary|guides?\b|resources|docs|documentation|support|help-center|faq|investor/i;
 
 const SKIP_EXT = /\.(pdf|jpe?g|png|gif|svg|webp|avif|ico|css|js|mjs|json|xml|txt|zip|gz|rar|mp[34]|webm|mov|woff2?|ttf|eot|map)$/i;
 
