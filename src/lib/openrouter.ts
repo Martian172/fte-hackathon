@@ -89,13 +89,25 @@ export async function chatWithFallback(
   });
 
   let lastErr: unknown;
-  for (const model of chain) {
-    try {
-      const content = await chatCompletion(messages, { ...opts, model });
-      return { content, modelUsed: model };
-    } catch (err) {
-      lastErr = err;
-      if (!isModelLevelFailure(err)) throw err; // e.g. invalid key — no point trying other models
+  for (let i = 0; i < chain.length; i++) {
+    const model = chain[i];
+    // Fight for the user's explicitly chosen model: one extra retry on 429
+    // (shared free pools often free up within seconds) before falling back.
+    const attempts = i === 0 ? 2 : 1;
+    for (let attempt = 0; attempt < attempts; attempt++) {
+      try {
+        const content = await chatCompletion(messages, { ...opts, model });
+        return { content, modelUsed: model };
+      } catch (err) {
+        lastErr = err;
+        if (!isModelLevelFailure(err)) throw err; // e.g. invalid key — no point trying other models
+        const rateLimited = err instanceof ApiError && err.status === 429;
+        if (attempt < attempts - 1 && rateLimited) {
+          await new Promise((r) => setTimeout(r, 2_000));
+          continue;
+        }
+        break;
+      }
     }
   }
   throw lastErr instanceof ApiError

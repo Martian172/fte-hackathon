@@ -33,7 +33,7 @@ TASK — return ONLY this JSON object:
   "companyName": "official company name",
   "website": "${input.website}",
   "phone": "primary phone with country code, or null if not clearly found",
-  "address": "headquarters address (street, city, country) or null",
+  "address": "headquarters address — full street address if available, otherwise city + country stated in the content or search results; null only if truly unknown",
   "summary": "3-4 factual sentences: what the company does, for whom, and how it positions itself",
   "productsServices": ["5-12 concise names of actual products or services"],
   "painPoints": ["4-6 specific business challenges this company likely faces"],
