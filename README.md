@@ -130,7 +130,8 @@ Sidebar → **Discord** tab → paste the bot token + channel ID (evaluator-prov
 - **`www.` vs apex mismatch** → crawler retries the alternate host automatically
 - **Company name with no clear official site** → friendly message suggesting direct URL input
 - **LLM returns invalid/malformed JSON** → code-fence stripping + bracket slicing + zod validation + one corrective retry, then a clean error — the UI never renders garbage
-- **Selected model rate-limited/unavailable (free tiers!)** → automatic fallback chain ending in OpenRouter's free-models router
+- **Selected model rate-limited/unavailable (free tiers!)** → the chosen model is retried once, then the request falls back across up to 8 models — known-good ones first, then the *live* list of free models fetched from OpenRouter — and the substitution is labelled in the UI and the PDF
+- **API key's daily free quota exhausted** → OpenRouter caps free-tier keys at 50 requests/day *per account*, so no model switch can help. The app detects this specific 429 (`free-models-per-day`), stops walking the chain immediately instead of burning ~7 futile calls, and tells the user to paste their own key in the sidebar
 - **Missing API keys** → clear on-screen message pointing at the sidebar, not a stack trace
 - **Phone/address hallucination** → deterministic crawler signals (JSON-LD, `tel:` links) override LLM values; fields render "Not publicly listed" instead of invented data
 - **Duplicate pages** (`/` vs `/home`, tracking params) → URL normalization + content fingerprint dedupe

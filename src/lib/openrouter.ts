@@ -18,6 +18,51 @@ export const FALLBACK_MODELS = [
   "google/gemma-4-31b-it:free",
 ];
 
+/** Widest chain we will walk in one request — bounds worst-case latency. */
+const MAX_CHAIN = 8;
+
+/**
+ * Sentinel status for "this API key's daily free-model quota is gone".
+ * Distinct from 429 because switching models cannot help — only a different key can,
+ * so the fallback chain must stop immediately instead of burning time.
+ */
+export const QUOTA_EXHAUSTED = 460;
+
+interface OpenRouterModelInfo {
+  id: string;
+  pricing?: { prompt?: string; completion?: string };
+  architecture?: { output_modalities?: string[] };
+}
+
+let freeModelCache: { at: number; ids: string[] } | null = null;
+const FREE_CACHE_TTL = 15 * 60 * 1000;
+
+/**
+ * Live list of free text models, newest snapshot cached for 15 min.
+ * Free-tier capacity on OpenRouter is a *shared upstream pool* — when it is busy,
+ * several models 429 at once, so the fallback chain has to be wide, not a fixed few.
+ */
+async function freeModelIds(): Promise<string[]> {
+  if (freeModelCache && Date.now() - freeModelCache.at < FREE_CACHE_TTL) return freeModelCache.ids;
+  try {
+    const res = await fetchWithTimeout("https://openrouter.ai/api/v1/models", {}, 8_000);
+    if (!res.ok) throw new Error(String(res.status));
+    const body = (await res.json()) as { data?: OpenRouterModelInfo[] };
+    const ids = (body.data ?? [])
+      .filter(
+        (m) =>
+          m.pricing?.prompt === "0" &&
+          m.pricing?.completion === "0" &&
+          (!m.architecture?.output_modalities || m.architecture.output_modalities.includes("text"))
+      )
+      .map((m) => m.id);
+    if (ids.length) freeModelCache = { at: Date.now(), ids };
+    return ids;
+  } catch {
+    return []; // fall back to the hardcoded chain
+  }
+}
+
 export interface ChatMessage {
   role: "system" | "user" | "assistant";
   content: string;
@@ -54,7 +99,19 @@ async function chatCompletion(messages: ChatMessage[], opts: ChatOptions): Promi
 
   if (res.status === 401) throw new ApiError("OpenRouter rejected the API key — check it in Settings.", 401);
   if (res.status === 402) throw new ApiError("OpenRouter: out of credits for this model.", 402);
-  if (res.status === 429) throw new ApiError(`Model ${opts.model} is rate-limited.`, 429);
+  if (res.status === 429) {
+    // Two very different 429s: an account-wide daily cap (no model switch can help —
+    // the user must supply their own key) vs. one busy model (fallback will help).
+    const raw = await res.text().catch(() => "");
+    if (/free-models-per-day|openrouter_free_tier_daily/i.test(raw)) {
+      throw new ApiError(
+        "The configured OpenRouter key has used up its free daily quota (50 requests/day). " +
+          "Paste your own free OpenRouter key in the sidebar to keep researching — it takes a minute to create one at openrouter.ai.",
+        QUOTA_EXHAUSTED
+      );
+    }
+    throw new ApiError(`Model ${opts.model} is rate-limited.`, 429);
+  }
   if (!res.ok) {
     let detail = "";
     try {
@@ -72,7 +129,7 @@ async function chatCompletion(messages: ChatMessage[], opts: ChatOptions): Promi
   return content;
 }
 
-/** Errors where switching model can help (vs. a bad key, where it cannot). */
+/** Errors where switching model can help (vs. a bad key or spent quota, where it cannot). */
 function isModelLevelFailure(err: unknown): boolean {
   return err instanceof ApiError && [402, 404, 408, 429, 502, 504].includes(err.status);
 }
@@ -81,14 +138,18 @@ export async function chatWithFallback(
   messages: ChatMessage[],
   opts: ChatOptions
 ): Promise<{ content: string; modelUsed: string }> {
+  // Chain = user's choice → known-good models → whatever else is free right now.
   const tried = new Set<string>();
-  const chain = [opts.model, ...FALLBACK_MODELS].filter((m) => {
-    if (tried.has(m)) return false;
-    tried.add(m);
-    return true;
-  });
+  const chain = [opts.model, ...FALLBACK_MODELS, ...(await freeModelIds())]
+    .filter((m) => {
+      if (tried.has(m)) return false;
+      tried.add(m);
+      return true;
+    })
+    .slice(0, MAX_CHAIN);
 
   let lastErr: unknown;
+  let sawRateLimit = false;
   for (let i = 0; i < chain.length; i++) {
     const model = chain[i];
     // Fight for the user's explicitly chosen model: one extra retry on 429
@@ -102,6 +163,7 @@ export async function chatWithFallback(
         lastErr = err;
         if (!isModelLevelFailure(err)) throw err; // e.g. invalid key — no point trying other models
         const rateLimited = err instanceof ApiError && err.status === 429;
+        sawRateLimit ||= rateLimited;
         if (attempt < attempts - 1 && rateLimited) {
           await new Promise((r) => setTimeout(r, 2_000));
           continue;
@@ -109,6 +171,15 @@ export async function chatWithFallback(
         break;
       }
     }
+  }
+  // Every model in the chain failed. A pool-wide rate limit is the common case and
+  // needs a different message than a genuine outage — tell the user what to actually do.
+  if (sawRateLimit) {
+    throw new ApiError(
+      `OpenRouter's free-tier pool is busy right now — ${chain.length} free models were tried and all are rate-limited. ` +
+        "Wait ~30 seconds and press Try again, or pick a paid model in the sidebar if your key has credits.",
+      429
+    );
   }
   throw lastErr instanceof ApiError
     ? lastErr
