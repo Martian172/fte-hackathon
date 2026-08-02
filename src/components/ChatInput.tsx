@@ -14,10 +14,12 @@ interface ChatInputProps {
   busy: boolean;
   hasReport: boolean;
   companyName: string | null;
+  /** Display name of the model every new research will run on. */
+  modelLabel: string;
   onSubmit: (text: string, mode: InputMode) => void;
 }
 
-export default function ChatInput({ busy, hasReport, companyName, onSubmit }: ChatInputProps) {
+export default function ChatInput({ busy, hasReport, companyName, modelLabel, onSubmit }: ChatInputProps) {
   const [text, setText] = useState("");
   const [mode, setMode] = useState<InputMode>("research");
   const taRef = useRef<HTMLTextAreaElement>(null);
@@ -35,6 +37,15 @@ export default function ChatInput({ busy, hasReport, companyName, onSubmit }: Ch
   return (
     <div className="border-t border-white/10 bg-[#0a0a0a]/90 px-3 pb-3 pt-2.5 backdrop-blur sm:px-6">
       <div className="mx-auto max-w-3xl">
+        <div className="mb-2 flex flex-wrap items-center gap-1.5">
+          <span
+            className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 font-mono text-[9.5px] uppercase tracking-wider text-zinc-500"
+            title="Active AI model — change it in the sidebar"
+          >
+            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
+            <span className="truncate normal-case">{modelLabel}</span>
+          </span>
+        </div>
         {hasReport && (
           <div className="mb-2 flex gap-1">
             {(

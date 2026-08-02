@@ -55,7 +55,10 @@ export interface Competitor {
 export interface ResearchReport {
   profile: CompanyProfile;
   competitors: Competitor[];
+  /** Model that actually produced the analysis (may be a fallback). */
   modelUsed: string;
+  /** Model the user had selected when the research started. */
+  requestedModel: string;
   generatedAt: string;
   sources: string[];
 }

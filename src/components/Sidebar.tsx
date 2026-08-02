@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import ModelPicker from "@/components/ModelPicker";
 import type { ModelOption, Settings } from "@/lib/client";
 
 /**
@@ -24,8 +25,6 @@ const input =
 export default function Sidebar({ settings, models, onChange, onSave, onNewResearch }: SidebarProps) {
   const [tab, setTab] = useState<"api" | "discord">("api");
   const [saved, setSaved] = useState(false);
-  const [freeOnly, setFreeOnly] = useState(true);
-  const [modelQuery, setModelQuery] = useState("");
 
   const save = () => {
     onSave();
@@ -33,10 +32,6 @@ export default function Sidebar({ settings, models, onChange, onSave, onNewResea
     setTimeout(() => setSaved(false), 1800);
   };
 
-  const q = modelQuery.trim().toLowerCase();
-  const matches = (m: ModelOption) => !q || m.name.toLowerCase().includes(q) || m.id.toLowerCase().includes(q);
-  const freeModels = models.filter((m) => m.free && matches(m));
-  const paidModels = models.filter((m) => !m.free && matches(m));
 
   return (
     <div className="flex h-full flex-col overflow-y-auto border-r border-white/10 bg-[#0d0d0f]">
@@ -103,65 +98,11 @@ export default function Sidebar({ settings, models, onChange, onSave, onNewResea
               />
             </div>
             <div className="space-y-1.5">
-              <label htmlFor="model" className={label}>AI model</label>
-              {/* Free-tier / all-models toggle bar */}
-              <div className="grid grid-cols-2 gap-1 rounded-lg border border-white/10 bg-black/30 p-1">
-                {(
-                  [
-                    [true, "Free tier"],
-                    [false, "All models"],
-                  ] as const
-                ).map(([isFree, labelText]) => (
-                  <button
-                    key={labelText}
-                    type="button"
-                    onClick={() => setFreeOnly(isFree)}
-                    className={`rounded-md py-1.5 font-mono text-[10px] uppercase tracking-widest transition ${
-                      freeOnly === isFree ? "bg-amber-500 text-black" : "text-zinc-400 hover:text-zinc-200"
-                    }`}
-                  >
-                    {labelText}
-                  </button>
-                ))}
-              </div>
-              <input
-                type="text"
-                value={modelQuery}
-                onChange={(e) => setModelQuery(e.target.value)}
-                placeholder="Search models… (e.g. nemotron, gemma)"
-                aria-label="Search models"
-                className={input}
-              />
-              <select
-                id="model"
-                value={settings.model}
-                onChange={(e) => onChange({ model: e.target.value })}
-                className={`${input} appearance-none`}
-              >
-                {!models.some((m) => m.id === settings.model) && (
-                  <option value={settings.model}>{settings.model}</option>
-                )}
-                {freeModels.length > 0 && (
-                  <optgroup label={`Free models (${freeModels.length})`}>
-                    {freeModels.map((m) => (
-                      <option key={m.id} value={m.id}>{m.name}</option>
-                    ))}
-                  </optgroup>
-                )}
-                {!freeOnly && paidModels.length > 0 && (
-                  <optgroup label="Paid models (need OpenRouter credits)">
-                    {paidModels.map((m) => (
-                      <option key={m.id} value={m.id}>{m.name}</option>
-                    ))}
-                  </optgroup>
-                )}
-              </select>
+              <label className={label}>AI model</label>
+              <ModelPicker models={models} value={settings.model} onSelect={(id) => onChange({ model: id })} />
               <p className="text-[10px] leading-relaxed text-zinc-600">
-                {freeOnly
-                  ? `${freeModels.length} free-tier models — no credits needed. `
-                  : "All OpenRouter models — paid ones need credits on your key. "}
-                Every research runs on the selected model; if it&apos;s rate-limited the app
-                falls back to the next free model and labels the result.
+                Every research runs on the selected model. If it&apos;s rate-limited, the app
+                falls back to the next free model and clearly labels the result.
               </p>
             </div>
             <button

@@ -120,7 +120,11 @@ export function buildPdf(report: ResearchReport): { blob: Blob; fileName: string
   doc.text(sanitizePdfText(profile.companyName).slice(0, 48), MARGIN, 74);
   doc.setFont("helvetica", "normal").setFontSize(9.5).setTextColor(200, 200, 205);
   const generated = new Date(report.generatedAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
-  doc.text(`${profile.website}   ·   Generated ${generated}   ·   Model: ${report.modelUsed}`, MARGIN, 96);
+  const modelNote =
+    report.modelUsed === report.requestedModel
+      ? report.modelUsed
+      : `${report.modelUsed} (requested ${report.requestedModel})`;
+  doc.text(sanitizePdfText(`${profile.website}   ·   Generated ${generated}   ·   Model: ${modelNote}`), MARGIN, 96);
   b.y = 140;
 
   // Company information

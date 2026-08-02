@@ -192,7 +192,12 @@ export default function ResearchCard({ msg, onDownloadPdf, onRetry, onRetryDisco
             {msg.discord === "idle" && !discordConfigured && (
               <span className="text-[10px] text-zinc-600">Configure Discord in the sidebar to auto-send reports</span>
             )}
-            <span className="ml-auto font-mono text-[9.5px] text-zinc-600">{report.modelUsed}</span>
+            <span className="ml-auto text-right font-mono text-[9.5px] text-zinc-600">
+              {report.modelUsed}
+              {report.modelUsed !== report.requestedModel && (
+                <span className="block text-amber-500/80">requested {report.requestedModel} — was unavailable</span>
+              )}
+            </span>
           </div>
         </div>
       )}

@@ -137,6 +137,7 @@ export default function Home() {
           profile,
           competitors: comp.competitors,
           modelUsed,
+          requestedModel: s.model,
           generatedAt: new Date().toISOString(),
           sources: crawl.pages.map((p) => p.url),
         };
@@ -302,6 +303,7 @@ export default function Home() {
           busy={busy}
           hasReport={!!lastReport}
           companyName={lastReport?.profile.companyName ?? null}
+          modelLabel={models.find((m) => m.id === settings.model)?.name ?? settings.model}
           onSubmit={onSubmit}
         />
       </main>
