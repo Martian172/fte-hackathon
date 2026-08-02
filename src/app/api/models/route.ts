@@ -18,6 +18,7 @@ interface OpenRouterModel {
   id: string;
   name?: string;
   pricing?: { prompt?: string; completion?: string };
+  architecture?: { output_modalities?: string[] };
 }
 
 let cache: { at: number; models: ModelOption[] } | null = null;
@@ -32,6 +33,8 @@ export async function GET(): Promise<NextResponse> {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const body = (await res.json()) as { data?: OpenRouterModel[] };
     const models: ModelOption[] = (body.data ?? [])
+      // Chat research needs text output — drop image/audio/video generators (e.g. Lyria)
+      .filter((m) => !m.architecture?.output_modalities || m.architecture.output_modalities.includes("text"))
       .map((m) => ({
         id: m.id,
         name: m.name ?? m.id,

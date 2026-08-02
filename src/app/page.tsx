@@ -122,10 +122,11 @@ export default function Home() {
         const crawl = await api.crawl(resolved.website, s);
         setStep(id, "crawl", "done", crawl.warning ?? `${crawl.visited} pages analyzed`);
 
-        // 3. AI analysis (OpenRouter)
+        // 3. AI analysis (OpenRouter) — label transparently if a fallback model ran
         setStep(id, "analyze", "active");
         const { profile, modelUsed } = await api.analyze(resolved.name, resolved.website, crawl, s);
-        setStep(id, "analyze", "done", modelUsed);
+        const modelNote = modelUsed === s.model ? modelUsed : `${modelUsed} (fallback — ${s.model} unavailable)`;
+        setStep(id, "analyze", "done", modelNote);
 
         // 4. Competitor identification
         setStep(id, "competitors", "active");
