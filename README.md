@@ -2,10 +2,8 @@
 
 **AI-powered Company Research Assistant** — enter a company name or website URL and get a full research report: company info, products & services, AI-generated pain points, competitor analysis, and a downloadable PDF — in a ChatGPT-style interface.
 
-> **Live demo:** _deploy URL goes here_
+> **Live demo:** https://fte-hackathon.vercel.app
 > **Built for the Relu Consultancy — AI & Automation Developer hiring challenge (Aug 2026).**
-
-![screenshot placeholder](docs/screenshot.png)
 
 ## How it works
 
